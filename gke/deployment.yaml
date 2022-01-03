@@ -28,4 +28,4 @@ spec:
           command: ["/bin/sh","-c"]
           args: ["npm start"]
           ports:
-            - containerPort: 3030
+            - containerPort: 3000

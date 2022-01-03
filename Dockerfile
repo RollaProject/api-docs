@@ -5,13 +5,10 @@ ENV NODE_ENV="production"
 RUN mkdir -p /app
 WORKDIR /app
 
-COPY package.json package-lock.json ./
+COPY . ./
 RUN npm install && \
     npm cache clean --force
 
-COPY index.js swagger.yaml ./
-COPY index.html ./node_modules/swagger-ui-dist/index.html
-COPY lib ./lib
-
 EXPOSE 3000
-ENTRYPOINT ["npm", "start"]
+
+ENTRYPOINT["npm","start"]
