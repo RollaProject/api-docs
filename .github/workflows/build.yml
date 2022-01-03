@@ -1,31 +1,61 @@
----
-name: build
+name: mumbai-api-docs-deployment
 
 on:
   push:
-    branches:
-    - master
-  pull_request:
+    branches: [ master ]
 
+env:
+    IMAGE_NAME: gcr.io/${{ secrets.GCP_MUMBAI_PROJECT_ID }}/api-docs
+    SHA: $(echo ${GITHUB_SHA} | cut -c1-8)
 jobs:
-  test:
-    runs-on: ubuntu-latest
-    strategy:
-      matrix:
-        node-version:
-        - 10.x
-        - 14.x
-    steps:
-      - uses: actions/checkout@v2
-      - name: Use Node.js ${{ matrix.node-version }}
-        uses: actions/setup-node@v1
-        with:
-          node-version: ${{ matrix.node-version }}
-      - run: npm ci
-      - run: npm test
-
-  docker:
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@v2
-      - run: docker build -t swaggerql/swagger-combine-ui:${{ github.sha }} .
+    docker-deployment:
+        name: Push to Google Container Registry
+        runs-on: ubuntu-latest          
+        steps:
+        - name: Get SHA
+          shell: bash
+          run: echo "SHA=$(echo ${GITHUB_SHA} | cut -c1-8)" >> $GITHUB_ENV
+        - name: Login
+          uses: google-github-actions/setup-gcloud@master
+          with:
+            project_id: ${{ secrets.GCP_MUMBAI_PROJECT_ID }}
+            service_account_email: ${{ secrets.GCP_MUMBAI_SA_EMAIL }}
+            service_account_key: ${{ secrets.GCP_MUMBAI_SA_CREDENTIALS }}
+        - name: Configure Docker
+          run: gcloud auth configure-docker --quiet
+        - name: Checkout repository
+          uses: actions/checkout@v2
+        - name: Build Docker image
+          run: docker build -t ${{ env.IMAGE_NAME}}:${{ env.SHA }} --build-arg NPM_TOKEN=${{ secrets.NPM_TOKEN }} .
+        - name: Push Docker image
+          run: docker push ${{ env.IMAGE_NAME}}:${{ env.SHA }}
+    kubernetes-deployment:
+          runs-on: ubuntu-latest
+          steps:
+              - name: Get SHA
+                shell: bash
+                run: echo "SHA=$(echo ${GITHUB_SHA} | cut -c1-8)" >> $GITHUB_ENV
+              - name: Checkout repository
+                uses: actions/checkout@v2
+              - name: Set up Kustomize
+                run: |-
+                    cd gke/
+                    curl -s "https://raw.githubusercontent.com/kubernetes-sigs/kustomize/master/hack/install_kustomize.sh"  | bash
+                    chmod u+x ./kustomize
+              - name: Login
+                uses: google-github-actions/setup-gcloud@master
+                with:
+                    project_id: ${{ secrets.GCP_MUMBAI_PROJECT_ID }}
+                    service_account_email: ${{ secrets.GCP_MUMBAI_SA_EMAIL }}
+                    service_account_key: ${{ secrets.GCP_MUMBAI_SA_CREDENTIALS }}
+              - name: Configure Kubernetes
+                run:  gcloud container clusters get-credentials ${{ secrets.GCP_MUMBAI_PROJECT_ID }}-cluster --region europe-west2
+              - name: Deploy
+                run: |-
+                    cd gke/
+                    ./kustomize edit set image gcr.io/PROJECT_ID/IMAGE:TAG=${{ env.IMAGE_NAME}}:${{ env.SHA }}
+                    ./kustomize edit set namespace ${{ secrets.GCP_MUMBAI_PROJECT_ID }}-api-docs
+                    ./kustomize build . | kubectl apply -f -
+                    kubectl rollout status deployment/api-docs-deployment --namespace ${{ secrets.GCP_MUMBAI_PROJECT_ID }}-api-docs
+                    kubectl get services -o wide
+          needs: docker-deployment
