@@ -1,5 +1,4 @@
 name: mumbai-api-docs-deployment
-
 on:
   push:
     branches: [ master ]
