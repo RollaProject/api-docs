@@ -26,6 +26,6 @@ spec:
                   memory: "2Gi"
                   cpu: "2"
           command: ["/bin/sh","-c"]
-          args: ["node index.js"]
+          args: ["npm start"]
           ports:
             - containerPort: 3030

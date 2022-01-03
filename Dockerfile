@@ -14,4 +14,4 @@ COPY index.html ./node_modules/swagger-ui-dist/index.html
 COPY lib ./lib
 
 EXPOSE 3000
-ENTRYPOINT ["node", "index.js"]
+ENTRYPOINT ["npm", "start"]
